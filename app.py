@@ -1,25 +1,26 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from openai import OpenAI
 
 # ======================
-# CONFIG
+# CONFIG (Direct Secrets)
 # ======================
 OPENAI_API_KEY = "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"
 GPT_MODEL = "gpt-4.1"
-DB_FILE = "memory.db"
+DATABASE_URL = "postgresql://username:password@host:5432/dbname"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = Flask(__name__)
-CORS(app)   # IMPORTANT for frontend connection
+CORS(app)   # Allow frontend connections
 
 # ======================
 # DATABASE
 # ======================
 def get_db():
-    return sqlite3.connect(DB_FILE)
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
 def init_db():
     db = get_db()
@@ -27,22 +28,23 @@ def init_db():
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS blocks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE
-    )
+        id SERIAL PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL
+    );
     """)
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        block_id INTEGER,
-        role TEXT,
-        content TEXT,
+        id SERIAL PRIMARY KEY,
+        block_id INTEGER REFERENCES blocks(id) ON DELETE CASCADE,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
+    );
     """)
 
     db.commit()
+    cur.close()
     db.close()
 
 init_db()
@@ -53,38 +55,45 @@ init_db()
 def create_block(name):
     db = get_db()
     cur = db.cursor()
-    cur.execute("INSERT OR IGNORE INTO blocks (name) VALUES (?)", (name,))
+    cur.execute(
+        "INSERT INTO blocks (name) VALUES (%s) ON CONFLICT (name) DO NOTHING",
+        (name,)
+    )
     db.commit()
+    cur.close()
     db.close()
 
 def get_block_id(name):
     db = get_db()
     cur = db.cursor()
-    cur.execute("SELECT id FROM blocks WHERE name = ?", (name,))
+    cur.execute("SELECT id FROM blocks WHERE name = %s", (name,))
     row = cur.fetchone()
+    cur.close()
     db.close()
-    return row[0] if row else None
+    return row["id"] if row else None
 
 def save_message(block_id, role, content):
     db = get_db()
     cur = db.cursor()
     cur.execute(
-        "INSERT INTO messages (block_id, role, content) VALUES (?, ?, ?)",
+        "INSERT INTO messages (block_id, role, content) VALUES (%s, %s, %s)",
         (block_id, role, content)
     )
     db.commit()
+    cur.close()
     db.close()
 
 def load_block_messages(block_id):
     db = get_db()
     cur = db.cursor()
     cur.execute(
-        "SELECT role, content FROM messages WHERE block_id = ? ORDER BY id",
+        "SELECT role, content FROM messages WHERE block_id = %s ORDER BY id",
         (block_id,)
     )
     rows = cur.fetchall()
+    cur.close()
     db.close()
-    return [{"role": r, "content": c} for r, c in rows]
+    return rows
 
 # ======================
 # GPT CALL
@@ -101,7 +110,6 @@ def call_gpt(messages):
 # ======================
 # API ROUTES
 # ======================
-
 @app.route("/blocks", methods=["POST"])
 def new_block():
     name = request.json.get("name")
@@ -117,8 +125,9 @@ def list_blocks():
     cur = db.cursor()
     cur.execute("SELECT name FROM blocks ORDER BY id DESC")
     rows = cur.fetchall()
+    cur.close()
     db.close()
-    return jsonify([r[0] for r in rows])
+    return jsonify([r["name"] for r in rows])
 
 @app.route("/chat", methods=["POST"])
 def chat():
