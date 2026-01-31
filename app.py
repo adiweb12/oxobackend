@@ -7,7 +7,7 @@ from openai import OpenAI
 # ======================
 # CONFIG (Direct Secrets)
 # ======================
-OPENAI_API_KEY = "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"
+OPENAI_API_KEY = "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"
 GPT_MODEL = "gpt-4.1"
 DATABASE_URL = "postgresql://testbase_nriq_user:YblTg3DsAbznOu3mTsedodGbbeRNzOvQ@dpg-d5uvggcoud1c73859uc0-a/testbase_nriq"
 
