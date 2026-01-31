@@ -9,7 +9,7 @@ from openai import OpenAI
 # ======================
 OPENAI_API_KEY = "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"
 GPT_MODEL = "gpt-4.1"
-DATABASE_URL = "postgresql://username:password@host:5432/dbname"
+DATABASE_URL = "postgresql://testbase_nriq_user:YblTg3DsAbznOu3mTsedodGbbeRNzOvQ@dpg-d5uvggcoud1c73859uc0-a/testbase_nriq"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
